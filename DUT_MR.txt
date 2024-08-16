@@ -1,0 +1,81 @@
+library(TwoSampleMR)
+library(data.table)
+library(gwasglue)
+library(plinkbinr)
+library(ieugwasr)
+setwd("F:\\immune cells")
+inputFile="GCST90001458.qc.tsv"
+expfile<-read.table("GCST90001458.qc.tsv",header = T,sep = "\t")
+exp_dat<-read_exposure_data(filename = "GCST90001458.qc.tsv",
+                            sep = "\t",
+                            snp_col = "variant_id",
+                            beta_col = "beta",
+                            se_col = "standard_error",
+                            eaf_col = "effect_allele_frequency",
+                            effect_allele_col = "effect_allele",
+                            other_allele_col = "other_allele",
+                            pval_col = "p_value",
+                            samplesize_col = "n",
+                            chr_col = "chromosome",
+                            pos_col = "base_pair_location")
+exp_dat$id.exposure<-"GCST90001458"
+exp_dat$exposure<-"immune"
+exp_dat<-subset(exp_dat,pval.exposure<5e-07)
+exp_dat$id<-exp_dat$id.exposure
+exp_dat$rsid<-exp_dat$SNP
+exp_dat$pval<-exp_dat$pval.exposure
+bfile<-"E:\\eur"
+exp_dat<-ld_clump(exp_dat,
+                  plink_bin = get_plink_exe(),
+                  bfile = "E:/eur/eur",
+                  clump_kb  = 5000,
+                  clump_r2 = 0.01)
+exp_dat$rsid<-NULL
+exp_dat$pval<-NULL
+exp_dat$id<-NULL
+N<-exp_dat[1,"samplesize.exposure"]
+exp_dat$maf.exposure<-ifelse(exp_dat$eaf.exposure>0.5, exp_dat$eaf.exposure,1-exp_dat$eaf.exposure)
+exp_dat$R2<-(exp_dat$beta.exposure)^2/((exp_dat$beta.exposure)^2+((exp_dat$se.exposure)^2)*N)
+exp_dat$F<-(N-2)*(exp_dat$R2/(1-exp_dat$R2))
+Ffilter<-10
+outfile<-fread("finngen_R10_I9_AORTDIS")
+out_dat<-read_outcome_data(filename = "finngen_R10_I9_AORTDIS",
+                           snps = exp_dat$SNP,
+                           sep = "\t",
+                           snp_col = "rsids",
+                           beta_col = "beta",
+                           se_col = "sebeta",
+                           eaf_col = "af_alt",
+                           effect_allele_col = "alt",
+                           other_allele_col = "ref",
+                           pval_col = "pval",
+                           gene_col = "nearest_genes",
+                           chr_col = "chrom",
+                           pos_col = "pos")
+out_dat$outcome.deprecated<-"Aortic dissection ||  || "
+out_dat$id.outcome<-"finngen_R10_I9_AORTDIS"
+out_dat$outcome<-"Aortic dissection || id:finngen_R10_I9_AORTDIS"
+har_dat<-harmonise_data(exposure_dat = exp_dat,outcome_dat = out_dat,action = 2)
+mr_result<-mr(har_dat)
+mr_result<-generate_odds_ratios(mr_res = mr_result)
+write.csv(mr_result,file = "mr_results.csv")
+
+#MR_Presso
+library(MRPRESSO)
+mr_presso_result <-mr_presso(BetaOutcome ="beta.outcome", BetaExposure = "beta.exposure", SdOutcome ="se.outcome", SdExposure = "se.exposure", 
+           OUTLIERtest = TRUE,DISTORTIONtest = TRUE, data = har_dat, NbDistribution = 1000,  
+           SignifThreshold = 0.05)
+write.csv(mr_presso_result,file = "mr_presso_result.csv")
+ 
+heter_result<-mr_heterogeneity(har_dat,method_list = c("mr_egger_regression","mr_ivw"))
+write.csv(heter_result,file = "heterogeneity_results.csv")
+pleio_result<-mr_pleiotropy_test(har_dat)
+write.csv(pleio_result,file = "pleiotropy_results.csv")
+loo_result<-mr_leaveoneout(har_dat)
+write.csv(loo_result,file = "leaveoneout.csv")
+mr_leaveoneout_plot(loo_result)
+mr_scatter_plot(mr_result, har_dat)
+single_result<-mr_singlesnp(har_dat)
+write.csv(single_result,file = "singlesnp.csv")
+mr_forest_plot(single_result)
+mr_funnel_plot(single_result)
