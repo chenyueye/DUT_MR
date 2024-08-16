@@ -1,0 +1,36 @@
+library(forestploter)
+setwd("F:\\immune cells")
+for_dat<-read.csv("immune_cells_and_protien.csv",header = TRUE,sep = ",")
+for_dat$` `<-paste(rep(" ",30),collapse = " ")
+for_dat$`or(95%CI)` <- sprintf('%.2f(%.2f to %.2f)', 
+                               for_dat$OR, 
+                               for_dat$or_lci95, 
+                               for_dat$or_uci95)
+for_dat[is.na(for_dat)]<-" "
+for_dat$P.value <- format(round(for_dat$P.value, 4), nsmall = 4, scientific = FALSE)
+tm<-forest_theme(base_size = 10,
+                 ci_pch = 20,
+                 ci_col = "#6A8D9D",
+                 ci_lty = 1,
+                 ci_lwd = 2,
+                 ci_Theight = 0.5,
+                 refline_lwd = 1.5,
+                 refline_lty = "dashed",
+                 refline_col = "red",
+                 summary_fill = "gray",
+                 summary_col = "gray",
+                 footnote_cex = 1,
+                 footnote_fontface = "italic",
+                 footnote_col = "#6A8D9D")
+forest(for_dat[,c(1:4,11:12,8:10)],
+       est = for_dat$OR,
+       lower = for_dat$or_lci95,
+       upper = for_dat$or_uci95,
+       sizes = 0.5,
+       ci_column = 5,
+       ref_line = 1,
+       xlim = c(0,4),
+       ticks_at = c(0,1,2,3,4),
+       arrow_lab = c('protective factor','risk factor'),
+       footnote = 'p-value<0.05 was considered statistically significant',
+       theme = tm)
